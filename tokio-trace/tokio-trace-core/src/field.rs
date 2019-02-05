@@ -221,6 +221,10 @@ pub struct DisplayValue<T: fmt::Display>(T);
 #[derive(Debug, Clone)]
 pub struct DebugValue<T: fmt::Debug>(T);
 
+/// Statically asserts that an array is of a valid length to be used in a `ValueSet`.
+pub trait ValidLen<'a>: ::sealed::Sealed +
+    ::std::borrow::Borrow<[(&'a Field, Option<&'a (Value + 'a)>)]> {}
+
 /// Wraps a type implementing `fmt::Display` as a `Value` that can be
 /// recorded using its `Display` implementation.
 pub fn display<T>(t: T) -> DisplayValue<T>
@@ -277,6 +281,17 @@ macro_rules! impl_value {
             }
         )+
     };
+}
+
+macro_rules! impl_valid_len {
+    ( $( $len:tt ),+ ) => {
+        $(
+            impl<'a> $crate::sealed::Sealed for
+                [(&'a Field, Option<&'a (Value + 'a)>); $len] {}
+            impl<'a> $crate::field::ValidLen<'a> for
+                [(&'a Field, Option<&'a (Value + 'a)>); $len] {}
+        )+
+    }
 }
 
 // ===== impl Value =====
@@ -447,13 +462,19 @@ impl FieldSet {
     }
 
     /// Returns a new `ValueSet` with entries for this `FieldSet`'s values.
-    pub fn value_set<'v>(
+    ///
+    /// Note that a `ValueSet` may not be constructed with arrays of over 32
+    /// elements.
+    pub fn value_set<'v, V>(
         &'v self,
-        values: &'v [(&'v Field, Option<&'v (Value + 'v)>)],
-    ) -> ValueSet<'v> {
+        values: &'v V,
+    ) -> ValueSet<'v>
+    where
+        V: ValidLen<'v>,
+    {
         ValueSet {
             fields: self,
-            values,
+            values: &values.borrow()[..]
         }
     }
 
@@ -497,6 +518,8 @@ impl Iterator for Iter {
         })
     }
 }
+
+impl_valid_len! { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 }
 
 // ===== impl ValueSet =====
 
